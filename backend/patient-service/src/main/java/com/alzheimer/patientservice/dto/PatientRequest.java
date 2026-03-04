@@ -3,7 +3,9 @@ package com.alzheimer.patientservice.dto;
 import lombok.Data;
 import javax.validation.constraints.DecimalMin;
 import javax.validation.constraints.Min;
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 
 @Data
 public class PatientRequest {
@@ -44,7 +46,12 @@ public class PatientRequest {
     private Boolean diabetes;
     private Boolean hypertension;
     
+    @NotBlank(message = "First name is required")
+    @Size(max = 100, message = "First name must be at most 100 characters")
     private String firstName;
+    
+    @NotBlank(message = "Last name is required")
+    @Size(max = 100, message = "Last name must be at most 100 characters")
     private String lastName;
     
     @Min(value = 0, message = "Age cannot be negative")

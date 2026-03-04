@@ -1,19 +1,19 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { ThemeService } from './core/services/theme.service';
+import { Component } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-root',
-  standalone: true,
-  imports: [RouterOutlet],
-  template: '<router-outlet />',
-  styles: [':host { display: block; height: 100%; }'],
+  templateUrl: './app.component.html',
+  standalone: false,
+  styleUrl: './app.component.css'
 })
-export class AppComponent implements OnInit {
-  private readonly themeService = inject(ThemeService);
+export class AppComponent {
+  title = 'assistanceQuotidienne';
 
-  ngOnInit(): void {
-    // ThemeService constructor already applies the theme via effect()
-    // This ensures the service is eagerly instantiated on app startup
+  constructor(private translate: TranslateService) {
+    translate.addLangs(['fr', 'en']);
+    translate.setDefaultLang('fr');
+    const savedLang = localStorage.getItem('lang');
+    translate.use(savedLang === 'en' ? 'en' : 'fr');
   }
 }

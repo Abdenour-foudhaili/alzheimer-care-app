@@ -18,7 +18,7 @@ export interface ActivityResponse extends ActivityRequest {
   providedIn: 'root'
 })
 export class CognitiveService {
-  private apiUrl = 'http://localhost:8080/api/cognitive-activities';
+  private apiUrl = 'http://localhost:8090/api/cognitive-activities';
 
   constructor(private http: HttpClient) { }
 

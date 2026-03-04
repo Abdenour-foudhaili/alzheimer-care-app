@@ -1,7 +1,29 @@
 services:
+
+  # ───────────────────── Infrastructure ─────────────────────
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_HOST: "%"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - alzheimer-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     command: start-dev
+    container_name: keycloak
     ports:
       - "8081:8080"
     environment:
@@ -16,11 +38,177 @@ services:
     image: rabbitmq:3.12-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # AMQP protocol
-      - "15672:15672" # Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - alzheimer-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ───────────────────── Discovery Server ─────────────────────
+
+  discovery-server:
+    build:
+      context: ../backend/discovery-server
+      dockerfile: Dockerfile
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_APPLICATION_NAME: discovery-server
+      SERVER_PORT: 8761
+      EUREKA_CLIENT_REGISTER-WITH-EUREKA: "false"
+      EUREKA_CLIENT_FETCH-REGISTRY: "false"
+    networks:
+      - alzheimer-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+  # ───────────────────── API Gateway ─────────────────────
+
+  api-gateway:
+    build:
+      context: ../backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_APPLICATION_NAME: api-gateway
+      SERVER_PORT: 8080
+      EUREKA_CLIENT_SERVICE-URL_DEFAULTZONE: http://discovery-server:8761/eureka
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/alzheimer-realm
+      # Route 0 - patient-service
+      SPRING_CLOUD_GATEWAY_ROUTES_0_ID: patient-service
+      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: lb://patient-service
+      SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0: Path=/api/patients/**, /api/clinical-records/**
+      # Route 1 - cognitive-service
+      SPRING_CLOUD_GATEWAY_ROUTES_1_ID: cognitive-service
+      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: lb://cognitive-service
+      SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0: Path=/api/cognitive-activities, /api/cognitive-activities/**
+      SPRING_CLOUD_GATEWAY_ROUTES_1_FILTERS_0: DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+      # Route 2 - assistance-quotidienne
+      SPRING_CLOUD_GATEWAY_ROUTES_2_ID: assistance-quotidienne
+      SPRING_CLOUD_GATEWAY_ROUTES_2_URI: lb://assistance-quotidienne
+      SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0: Path=/api/fiches/**, /api/rapports/**, /api/rapports-hebdo/**, /api/notifications/**, /api/agenda/**, /api/traitements/**, /api/rendez-vous/**, /api/treatment/**, /api/medicalRecord/**, /api/emergencyContact/**, /api/users/**
+      SPRING_CLOUD_GATEWAY_ROUTES_2_FILTERS_0: DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+      # Global default filter
+      SPRING_CLOUD_GATEWAY_DEFAULT-FILTERS_0: DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - alzheimer-network
+
+  # ───────────────────── Patient Service ─────────────────────
+
+  patient-service:
+    build:
+      context: ../backend/patient-service
+      dockerfile: Dockerfile
+    container_name: patient-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_APPLICATION_NAME: patient-service
+      SERVER_PORT: 8082
+      EUREKA_CLIENT_SERVICE-URL_DEFAULTZONE: http://discovery-server:8761/eureka
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/patientdb?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_DRIVER-CLASS-NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_SHOW-SQL: "true"
+      SPRING_JPA_HIBERNATE_DDL-AUTO: update
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/alzheimer-realm
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - alzheimer-network
+
+  # ───────────────────── Cognitive Service ─────────────────────
+
+  cognitive-service:
+    build:
+      context: ../backend/cognitive-service
+      dockerfile: Dockerfile
+    container_name: cognitive-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_APPLICATION_NAME: cognitive-service
+      SERVER_PORT: 8083
+      EUREKA_CLIENT_SERVICE-URL_DEFAULTZONE: http://discovery-server:8761/eureka
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cognitivedb?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_DRIVER-CLASS-NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_SHOW-SQL: "true"
+      SPRING_JPA_HIBERNATE_DDL-AUTO: update
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/alzheimer-realm
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      SPRING_MAIN_ALLOW-BEAN-DEFINITION-OVERRIDING: "true"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      - alzheimer-network
+
+  # ───────────────────── Assistance Quotidienne ─────────────────────
+
+  assistance-quotidienne:
+    build:
+      context: "../backend/assistance quotidienne"
+      dockerfile: Dockerfile
+    container_name: assistance-quotidienne
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_APPLICATION_NAME: assistance-quotidienne
+      SERVER_PORT: 8088
+      EUREKA_CLIENT_SERVICE-URL_DEFAULTZONE: http://discovery-server:8761/eureka
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/assistancequotidiennedb?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_DRIVER-CLASS-NAME: com.mysql.cj.jdbc.Driver
+      SPRING_JPA_SHOW-SQL: "true"
+      SPRING_JPA_HIBERNATE_DDL-AUTO: update
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_GLOBALLY_QUOTED_IDENTIFIERS: "true"
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/alzheimer-realm
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
     networks:
       - alzheimer-network
 
@@ -29,4 +217,5 @@ networks:
     driver: bridge
 
 volumes:
+  mysql_data:
   keycloak_data:

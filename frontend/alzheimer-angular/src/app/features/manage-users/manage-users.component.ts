@@ -333,7 +333,7 @@ export class ManageUsersComponent implements OnInit {
     if (!user || user.id === undefined) return;
 
     this.isUpdating.set(true);
-    this.patientService.update(user.id, user).subscribe({
+    this.patientService.update(user.id, user as any).subscribe({
       next: () => {
         this.messageService.add({ 
             severity: 'success', 

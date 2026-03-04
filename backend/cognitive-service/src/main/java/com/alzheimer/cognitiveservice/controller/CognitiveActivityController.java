@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -17,7 +18,7 @@ public class CognitiveActivityController {
     private final CognitiveActivityService service;
 
     @PostMapping
-    public ResponseEntity<ActivityResponse> save(@RequestBody ActivityRequest request) {
+    public ResponseEntity<ActivityResponse> save(@Valid @RequestBody ActivityRequest request) {
         return ResponseEntity.ok(service.saveActivity(request));
     }
 

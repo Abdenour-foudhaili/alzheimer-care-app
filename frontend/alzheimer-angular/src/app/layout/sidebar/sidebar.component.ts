@@ -30,14 +30,14 @@ export class SidebarComponent {
   collapsed = signal(true);
 
   readonly navItems: NavItem[] = [
-    { label: 'Dashboard', icon: 'pi pi-th-large', route: '/', exact: true },
-    { label: 'Manage Users', icon: 'pi pi-users', route: '/manage-users', exact: false },
-    { label: 'Patients', icon: 'pi pi-users', route: '/patients', exact: false },
-    { label: 'Appointments', icon: 'pi pi-calendar', route: '/appointments', exact: false },
-    { label: 'Report History', icon: 'pi pi-file', route: '/clinical-reports/history', exact: false },
-    { label: 'New Clinical Report', icon: 'pi pi-plus-circle', route: '/clinical-reports/new', exact: false },
-    { label: 'System Settings', icon: 'pi pi-cog', route: '/settings', exact: false },
-    { label: 'My Workspace', icon: 'pi pi-home', route: '/patient/dashboard', exact: false },
+    { label: 'Dashboard', icon: 'pi pi-th-large', route: '/admin', exact: true },
+    { label: 'Manage Users', icon: 'pi pi-users', route: '/admin/manage-users', exact: false },
+    { label: 'Patients', icon: 'pi pi-users', route: '/admin/patients', exact: false },
+    { label: 'Appointments', icon: 'pi pi-calendar', route: '/admin/appointments', exact: false },
+    { label: 'Report History', icon: 'pi pi-file', route: '/admin/clinical-reports/history', exact: false },
+    { label: 'New Clinical Report', icon: 'pi pi-plus-circle', route: '/admin/clinical-reports/new', exact: false },
+    { label: 'Patient Workspace', icon: 'pi pi-home', route: '/admin/patient-dashboard', exact: false },
+    { label: 'System Settings', icon: 'pi pi-cog', route: '/admin/settings', exact: false },
   ];
 
   constructor(private router: Router) {}
@@ -46,7 +46,7 @@ export class SidebarComponent {
     { 
       label: 'My Profile', 
       icon: 'pi pi-user',
-      command: () => this.router.navigate(['/profile'])
+      command: () => this.router.navigate(['/admin/profile'])
     },
     { label: 'Account Settings', icon: 'pi pi-cog' },
     { separator: true },
